@@ -5,14 +5,14 @@ mod components;
 mod systems;
 
 use specs::{ World, DispatcherBuilder };
-use systems::input_receiver::InputReceiver;
+use systems::ipc_handler::IpcHandler;
 
 fn main() {
     let stdin = std::io::stdin();
     let mut world = World::new();
 
     let mut dispatcher = DispatcherBuilder::new()
-        .add(InputReceiver::new(), "input_receiver", &[])
+        .add(IpcHandler::new(), "ipc_handler", &[])
         .build();
 
     loop {

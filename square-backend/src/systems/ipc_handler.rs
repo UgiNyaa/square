@@ -4,11 +4,11 @@ use std::sync::mpsc::{ channel, Sender, Receiver, TryRecvError };
 use specs::System;
 use serde_json::{ from_str, Value, Error };
 
-pub struct InputReceiver {
+pub struct IpcHandler {
     rx: Receiver<Value>,
 }
 
-impl InputReceiver {
+impl IpcHandler {
     pub fn new() -> Self {
         let (sx, rx) = channel::<Value>();
 
@@ -19,26 +19,27 @@ impl InputReceiver {
             }
         });
 
-        InputReceiver {
+        IpcHandler {
             rx: rx,
         }
     }
 }
 
-impl<'a> System<'a> for InputReceiver {
+impl<'a> System<'a> for IpcHandler {
     type SystemData = ();
 
     fn run(&mut self, (): Self::SystemData) {
-        match self.rx.try_recv() {
-            Ok(v) => {
-                println!("input received: {:?}", v);
+        let result = self.rx.try_recv();
+
+        if let Err(e) = result {
+            match e {
+                TryRecvError::Empty => return,
+                TryRecvError::Disconnected => panic!("Cannot receive input: {}", e),
             }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { }
-                    TryRecvError::Disconnected => panic!("Cannot receive input: {}", e)
-                }
-            }
+        }
+
+        if let Ok(json) = result {
+            println!("input received: {:?}", json);
         }
     }
 }
