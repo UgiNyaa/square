@@ -1,0 +1,8 @@
+[package]
+name = "square-backend"
+version = "0.1.0"
+authors = ["ugi"]
+
+[dependencies]
+specs = "0.10.0"
+serde_json = "1.0"
