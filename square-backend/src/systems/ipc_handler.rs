@@ -69,21 +69,6 @@ impl<'a> System<'a> for IpcHandler {
                 TryRecvError::Empty => return,
                 TryRecvError::Disconnected => panic!("Cannot receive input: {}", e),
             },
-        };
-
-/*
-        let result = self.rx.try_recv();
-
-        if let Err(e) = result {
-            match e {
-                TryRecvError::Empty => return,
-                TryRecvError::Disconnected => panic!("Cannot receive input: {}", e),
-            }
         }
-
-        if let Ok(json) = result {
-            println!("input received: {:?}", json);
-        }
-*/
     }
 }
