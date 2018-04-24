@@ -1,9 +1,9 @@
 use specs::{ Component, VecStorage };
 
 #[derive(Debug)]
-struct Position {
-    x: f32,
-    y: f32,
+pub struct Position {
+    pub x: f32,
+    pub y: f32,
 }
 
 impl Component for Position {

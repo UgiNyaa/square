@@ -1,8 +1,9 @@
 use std::thread;
-use std::io::{ stdin, BufRead };
+use std::io::{ stdout, stdin, BufRead, Write };
 use std::sync::mpsc::{ channel, Sender, Receiver, TryRecvError };
-use specs::System;
-use serde_json::{ from_str, Value, Error };
+use specs::{ System, Entities, Fetch, LazyUpdate };
+use serde_json::{ to_string, from_str, Value, Error };
+use components::Position;
 
 pub struct IpcHandler {
     rx: Receiver<Value>,
@@ -15,7 +16,7 @@ impl IpcHandler {
         thread::spawn(move || {
             let stdin = stdin();
             for line in stdin.lock().lines() {
-                sx.send(from_str(&line.unwrap()).unwrap());
+                sx.send(from_str(&line.unwrap()).unwrap()).unwrap();
             }
         });
 
@@ -26,9 +27,12 @@ impl IpcHandler {
 }
 
 impl<'a> System<'a> for IpcHandler {
-    type SystemData = ();
+    type SystemData = (
+        Entities<'a>,
+        Fetch<'a, LazyUpdate>
+    );
 
-    fn run(&mut self, (): Self::SystemData) {
+    fn run(&mut self, (entities, updater): Self::SystemData) {
         match self.rx.try_recv() {
             Ok(json) => match json.as_object() {
                 Some(map) => { 
@@ -62,6 +66,29 @@ impl<'a> System<'a> for IpcHandler {
                     };
 
                     println!("method: {:?}, id: {:?}, params: {:?}", method, id, params);
+
+                    let stdout = stdout(); 
+                    let response = match method {
+                        "join" => {
+                            let entity = entities.create();
+                            updater.insert(entity, Position { x: 0.0, y: 0.0 });
+
+                            json!({
+                                "id": id,
+                                "entity_id": entity.id(),
+                            }).to_string()
+                        },
+                        _ => json!({
+                            "id": id,
+                            "err": "unknown method",
+                        }).to_string()
+                    };
+
+                    {
+                        let mut lock = stdout.lock();
+
+                        lock.write(response.as_bytes()).unwrap();
+                    }
                 },
                 None => panic!("JSON message is not an object"),
             },
