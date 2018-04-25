@@ -1,9 +1,9 @@
 use std::thread;
 use std::io::{ stdout, stdin, BufRead, Write };
-use std::sync::mpsc::{ channel, Sender, Receiver, TryRecvError };
+use std::sync::mpsc::{ channel, Receiver, TryRecvError };
 use specs::{ System, Entities, Fetch, LazyUpdate };
 use serde_json::{ to_string, from_str, Value, Error };
-use components::Position;
+use components::{ Position, Velocity };
 
 pub struct IpcHandler {
     rx: Receiver<Value>,
@@ -30,9 +30,17 @@ impl<'a> System<'a> for IpcHandler {
     type SystemData = (
         Entities<'a>,
         Fetch<'a, LazyUpdate>
+        WriteStorage<'a, Position>,
+        WriteStorage<'a, Velocity>,
     );
 
     fn run(&mut self, (entities, updater): Self::SystemData) {
+        let json = match self.rx.try_recv() {
+            Ok(json) => json,
+            Err(e) if e == TryRecvError::Empty => return,
+            Err(e) if e == TryRecvError::Disconnected => panic!("Cannot receive input: {}", e),
+        };
+
         match self.rx.try_recv() {
             Ok(json) => match json.as_object() {
                 Some(map) => { 
@@ -69,14 +77,34 @@ impl<'a> System<'a> for IpcHandler {
 
                     let stdout = stdout(); 
                     let response = match method {
-                        "join" => {
+                        "spawn" => {
                             let entity = entities.create();
                             updater.insert(entity, Position { x: 0.0, y: 0.0 });
+                            updater.insert(entity, Velocity { x: 0.0, y: 0.0 });
 
                             json!({
                                 "id": id,
                                 "entity_id": entity.id(),
                             }).to_string()
+                        },
+                        "velocity" => {
+                            if params.size() < 3 {
+                                return json!({
+                                    "id": id,
+                                    "err": "too less params",
+                                });
+                            }
+
+                            let entity_id = params[0].unwrap().parse::<i32>().u;
+                            let x = params[1].unwrap();
+                            let y = params[2].unwrap();
+
+                            let entity = entities.entity(id);
+                            velocity.get_mut(entity_id) = Velocity { x: x, y: y };
+
+                            json!({
+                                "id": id,
+                            })
                         },
                         _ => json!({
                             "id": id,
