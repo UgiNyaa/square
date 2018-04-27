@@ -35,11 +35,138 @@ impl<'a> System<'a> for IpcHandler {
     );
 
     fn run(&mut self, (entities, updater): Self::SystemData) {
+        let stdout = stdout();
+
         let json = match self.rx.try_recv() {
             Ok(json) => json,
             Err(e) if e == TryRecvError::Empty => return,
             Err(e) if e == TryRecvError::Disconnected => panic!("Cannot receive input: {}", e),
         };
+
+        let map = match json.as_object() {
+            Ok(map) => map,
+            None => {
+                let mut lock = stdout.lock();
+                let response = json!({
+                    "err": "JSON message is not an object",
+                }).to_string();
+                lock.write(response.as_bytes());
+                return;
+            }
+        };
+
+        let id = match map.get("id") {
+            Some(id) => match id.as_str() {
+                Some(id) => id,
+                None => {
+                    let mut lock = stdout.lock();
+                    let response = json!({
+                        "err": "value of 'id' key is not a string",
+                    });
+                    lock.write(response.as_bytes());
+                    return;
+                },
+            },
+            None => {
+                let mut lock = stdout.lock();
+                let response = json!({
+                    "err": "There is no 'id' key",
+                });
+                lock.write(response.as_bytes());
+                return;
+            },
+        };
+
+        let method = match map.get("method") {
+            Some(method) => match method.as_str() {
+                Some(method) => method,
+                None => {
+                    let mut lock = stdout.lock();
+                    let response = json!({
+                        "id": id,
+                        "err": "value of 'method' key is not a string",
+                    });
+                    lock.write(response.as_bytes());
+                    return;
+                },
+            },
+            None => {
+                let mut lock = stdout.lock();
+                let response = json!({
+                    "id": id,
+                    "err": "There is no 'method' key",
+                });
+                lock.write(response.as_bytes());
+                return;
+            },
+        };
+
+        let params = match map.get("params") {
+            Some(params) => match params.as_str() {
+                Some(params) => params,
+                None => {
+                    let mut lock = stdout.lock();
+                    let response = json!({
+                        "id": id,
+                        "err": "value of 'params' key is not a string",
+                    });
+                    lock.write(response.as_bytes());
+                    return;
+                },
+            },
+            None => {
+                let mut lock = stdout.lock();
+                let response = json!({
+                    "id": id,
+                    "err": "There is no 'params' key",
+                });
+                lock.write(response.as_bytes());
+                return;
+            },
+        };
+
+        let response = match method {
+            "spawn" => {
+                let entity = entities.create();
+                updater.insert(entity, Position { x: 0.0, y: 0.0 });
+                updater.insert(entity, Velocity { x: 0.0, y: 0.0 });
+
+                json!({
+                    "id": id,
+                    "entity_id": entity.id(),
+                }).to_string()
+            },
+            "velocity" => {
+                if params.size() < 3 {
+                    let mut lock = stdout.lock();
+                    let response = json!({
+                        "id": id,
+                        "err": "too less params",
+                    }).to_string();
+                    lock.write(response.as_bytes());
+                    return;
+                }
+
+                let entity_id = params[0].unwrap().parse::<i32>().u;
+                let x = params[1].unwrap();
+                let y = params[2].unwrap();
+
+                let entity = entities.entity(id);
+                velocity.get_mut(entity_id) = Velocity { x: x, y: y };
+
+                json!({
+                    "id": id,
+                })
+            },
+            _ => json!({
+                "id": id,
+                "err": "unknown method",
+            }).to_string()
+        };
+
+        let mut lock = stdout.lock();
+        lock.write(response.as_bytes());
+        return;
 
         match self.rx.try_recv() {
             Ok(json) => match json.as_object() {
