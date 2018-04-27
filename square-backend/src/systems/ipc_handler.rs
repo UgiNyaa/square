@@ -29,7 +29,7 @@ impl IpcHandler {
 impl<'a> System<'a> for IpcHandler {
     type SystemData = (
         Entities<'a>,
-        Fetch<'a, LazyUpdate>
+        Fetch<'a, LazyUpdate>,
         WriteStorage<'a, Position>,
         WriteStorage<'a, Velocity>,
     );
@@ -44,7 +44,7 @@ impl<'a> System<'a> for IpcHandler {
         };
 
         let map = match json.as_object() {
-            Ok(map) => map,
+            Some(map) => map,
             None => {
                 let mut lock = stdout.lock();
                 let response = json!({
@@ -62,7 +62,7 @@ impl<'a> System<'a> for IpcHandler {
                     let mut lock = stdout.lock();
                     let response = json!({
                         "err": "value of 'id' key is not a string",
-                    });
+                    }).to_string();
                     lock.write(response.as_bytes());
                     return;
                 },
@@ -71,7 +71,7 @@ impl<'a> System<'a> for IpcHandler {
                 let mut lock = stdout.lock();
                 let response = json!({
                     "err": "There is no 'id' key",
-                });
+                }).to_string();
                 lock.write(response.as_bytes());
                 return;
             },
@@ -85,7 +85,7 @@ impl<'a> System<'a> for IpcHandler {
                     let response = json!({
                         "id": id,
                         "err": "value of 'method' key is not a string",
-                    });
+                    }).to_string();
                     lock.write(response.as_bytes());
                     return;
                 },
@@ -95,21 +95,37 @@ impl<'a> System<'a> for IpcHandler {
                 let response = json!({
                     "id": id,
                     "err": "There is no 'method' key",
-                });
+                }).to_string();
                 lock.write(response.as_bytes());
                 return;
             },
         };
 
         let params = match map.get("params") {
-            Some(params) => match params.as_str() {
-                Some(params) => params,
+            Some(params) => match params.as_array() {
+                Some(params) => match params.iter() {
+                    .map(|p| match p.as_str() {
+                        Some(p) => p.to_string(),
+                        None => Err("Not all params are string types"),
+                    }).collect() {
+                        Ok(params) => params,
+                        Err(e) => {
+                            let mut lock = stdout.lock();
+                            let response = json!({
+                                "id": id,
+                                "err": e,
+                            }).to_string();
+                            lock.write(response.as_bytes());
+                            return;
+                        }
+                    }
+                },
                 None => {
                     let mut lock = stdout.lock();
                     let response = json!({
                         "id": id,
                         "err": "value of 'params' key is not a string",
-                    });
+                    }).to_string();
                     lock.write(response.as_bytes());
                     return;
                 },
@@ -119,7 +135,7 @@ impl<'a> System<'a> for IpcHandler {
                 let response = json!({
                     "id": id,
                     "err": "There is no 'params' key",
-                });
+                }).to_string();
                 lock.write(response.as_bytes());
                 return;
             },
@@ -156,7 +172,7 @@ impl<'a> System<'a> for IpcHandler {
 
                 json!({
                     "id": id,
-                })
+                }).to_string()   
             },
             _ => json!({
                 "id": id,
@@ -167,7 +183,7 @@ impl<'a> System<'a> for IpcHandler {
         let mut lock = stdout.lock();
         lock.write(response.as_bytes());
         return;
-
+/*
         match self.rx.try_recv() {
             Ok(json) => match json.as_object() {
                 Some(map) => { 
@@ -252,5 +268,6 @@ impl<'a> System<'a> for IpcHandler {
                 TryRecvError::Disconnected => panic!("Cannot receive input: {}", e),
             },
         }
+*/
     }
 }
